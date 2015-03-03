@@ -36,9 +36,10 @@
 using namespace std;
 
 // External names used used by the rest of the system
-// to load particular device from the "ShapeokoGrblCamera.dll" library
+// to load particular device from the "ShapeokoTinyGCamera.dll" library
 const char* g_XYStageDeviceName = "DXYStage";
 const char* g_HubDeviceName = "DHub";
+const char* g_versionProp = "Version";
 
 ///////////////////////////////////////////////////////////////////////////////
 // Exported MMDevice API
@@ -80,18 +81,156 @@ ShapeokoGrblHub::ShapeokoGrblHub():
       initialized_(false),
       busy_(false)
 {
+  LogMessage("Constructor");
+  WPos[0] = 0.0;
+  WPos[1] = 0.0;
+  WPos[2] = 0.0;
+  MPos[0] = 0.0;
+  MPos[1] = 0.0;
+  MPos[2] = 0.0;
+
   CPropertyAction* pAct  = new CPropertyAction(this, &ShapeokoGrblHub::OnPort);
   CreateProperty(MM::g_Keyword_Port, "Undefined", MM::String, false, pAct, true);
 }
 
 int ShapeokoGrblHub::Initialize()
 {
+  LogMessage("Initialize");
+   /* From EVA's XYStage */
+   int ret = DEVICE_ERR;
+
+   // initialize device and get hardware information
+
+
+   // confirm that the device is supported
+
+
+   // check if we are already homed
+
+   CPropertyAction* pAct;
+
+   // Step size
+   // CreateProperty(g_StepSizeXProp, CDeviceUtils::ConvertToString(stepSizeUm), MM::Float, true);
+   // CreateProperty(g_StepSizeYProp, CDeviceUtils::ConvertToString(stepSizeUm), MM::Float, true);
+
+   // Max Speed
+   // pAct = new CPropertyAction (this, &MyShapeokoTinyg::OnMaxVelocity);
+   // CreateProperty(g_MaxVelocityProp, "100.0", MM::Float, false, pAct);
+   //SetPropertyLimits(g_MaxVelocityProp, 0.0, 31999.0);
+
+   // Acceleration
+   // pAct = new CPropertyAction (this, &MyShapeokoTinyg::OnAcceleration);
+   // CreateProperty(g_AccelProp, "100.0", MM::Float, false, pAct);
+   //SetPropertyLimits("Acceleration", 0.0, 150);
+
+   // Move timeout
+   // pAct = new CPropertyAction (this, &MyShapeokoTinyg::OnMoveTimeout);
+   // CreateProperty(g_MoveTimeoutProp, "10000.0", MM::Float, false, pAct);
+   //SetPropertyLimits("Acceleration", 0.0, 150);
+
+   // // Sync Step
+   // pAct = new CPropertyAction (this, &MyShapeokoTinyg::OnSyncStep);
+   // CreateProperty(g_SyncStepProp, "1.0", MM::Float, false, pAct);
+
+
+   ret = UpdateStatus();
+   if (ret != DEVICE_OK)
+      return ret;
+
+   /* From EVA_NDE_Grbl */
+
+   MMThreadGuard myLock(lock_);
+
+   ret = GetControllerVersion(version_);
+   if( DEVICE_OK != ret)
+      return ret;
+
+   pAct = new CPropertyAction(this, &ShapeokoGrblHub::OnVersion);
+   std::ostringstream sversion;
+   sversion << version_;
+   CreateProperty(g_versionProp, sversion.str().c_str(), MM::String, true, pAct);
+
+   // pAct = new CPropertyAction(this, &MyShapeokoTinyg::OnCommand);
+   // ret = CreateProperty("Command","", MM::String, false, pAct);
+   // if (DEVICE_OK != ret)
+   //    return ret;
+
+   // // turn off verbose serial debug messages
+   // GetCoreCallback()->SetDeviceProperty(port_.c_str(), "Verbose", "0");
+   // synchronize all properties
+   // --------------------------
+
+   ret = GetStatus();
+   if (ret != DEVICE_OK)
+      return ret;
+
+   LogMessage("Unlock device.");
+   ret = SetCommandComPortH("$X", "\n");
+   if (ret != DEVICE_OK)
+     return ret;
+   std::string an;
+    LogMessage("waiting for answer");
+   ret = GetSerialAnswerComPortH(an,"\r\n");
+   if (ret != DEVICE_OK)
+     return ret;
+   LogMessage("Unlocked device.");
+
+   ret = UpdateStatus();
+   if (ret != DEVICE_OK)
+      return ret;
+
   	initialized_ = true;
 	return DEVICE_OK;
 }
 
+// private and expects caller to:
+// 1. guard the port
+// 2. purge the port
+int ShapeokoGrblHub::GetControllerVersion(string& version)
+{
+  LogMessage("GetControllerVersion");
+   int ret = DEVICE_OK;
+   MMThreadGuard(this->executeLock_);
+   std::string cmd;
+   char buff[]={0x18,0x00};
+   cmd.assign(buff); 
+   std::string returnString;
+   SetAnswerTimeoutMs(2000.0);
+   PurgeComPortH();
+    LogMessage("about to reset");
+   ret = SetCommandComPortH(cmd.c_str(),"\n");
+   if (ret != DEVICE_OK)
+     return ret;
+   std::string an;
+    LogMessage("waiting for answer");
+   ret = GetSerialAnswerComPortH(an,"]\r\n");
+   if (ret != DEVICE_OK)
+     return ret;
+   std::string an2;
+   ret = GetSerialAnswerComPortH(an2,"]\r\n");
+   if (ret != DEVICE_OK)
+     return ret;
+    LogMessage("got answer");
+    LogMessage(an);
+   returnString = an;
+
+   std::vector<std::string> tokenInput;
+   char* pEnd;
+   CDeviceUtils::Tokenize(returnString, tokenInput, "\r\n[");
+   
+   if(tokenInput.size() != 2) {
+     LogMessage("tokensize:");
+     LogMessage(std::to_string(tokenInput.size()).c_str());
+     return DEVICE_ERR;
+   }
+   
+   version_ = tokenInput[0];
+   return ret;
+}
+
 int ShapeokoGrblHub::DetectInstalledDevices()
 {
+  LogMessage("DetectInstalledDevices");
    ClearInstalledDevices();
 
    // make sure this method is called before we look for available devices
@@ -102,9 +241,11 @@ int ShapeokoGrblHub::DetectInstalledDevices()
    for (unsigned i=0; i<GetNumberOfDevices(); i++)
    {
       char deviceName[MM::MaxStrLength];
+      LogMessage("Get device");
       bool success = GetDeviceName(i, deviceName, MM::MaxStrLength);
       if (success && (strcmp(hubName, deviceName) != 0))
       {
+        LogMessage("Got device", deviceName);
          MM::Device* pDev = CreateDevice(deviceName);
          AddInstalledDevice(pDev);
       }
@@ -117,8 +258,17 @@ void ShapeokoGrblHub::GetName(char* pName) const
    CDeviceUtils::CopyLimitedString(pName, g_HubDeviceName);
 }
 
+int ShapeokoGrblHub::OnVersion(MM::PropertyBase* pProp, MM::ActionType pAct)
+{
+   if (pAct == MM::BeforeGet)
+   {
+     pProp->Set(version_.c_str());
+   }
+   return DEVICE_OK;
+}
 int ShapeokoGrblHub::OnPort(MM::PropertyBase* pProp, MM::ActionType pAct)
 {
+  LogMessage("OnPort");
    if (pAct == MM::BeforeGet)
    {
       pProp->Set(port_.c_str());
@@ -133,6 +283,7 @@ int ShapeokoGrblHub::OnPort(MM::PropertyBase* pProp, MM::ActionType pAct)
 
 int ShapeokoGrblHub::OnCommand(MM::PropertyBase* pProp, MM::ActionType pAct)
 {
+  LogMessage("OnCommand");
    if (pAct == MM::BeforeGet)
    {
 	   pProp->Set(commandResult_.c_str());
@@ -190,7 +341,7 @@ int ShapeokoGrblHub::SendCommand(std::string command, std::string &returnString)
 	    //     LogMessage(std::string("Reset!"));
 		return DEVICE_OK;
    }
-   else if(command.c_str()[0] == '$' && command.c_str()[1] == 's' && command.c_str()[2] == 'r'){
+   else if(command == "?"){
 
      LogMessage("Status request.");
             	SetAnswerTimeoutMs(10000.0);
@@ -262,7 +413,7 @@ MM::DeviceDetectionStatus ShapeokoGrblHub::DetectDevice(void)
          // device specific default communication parameters
          // for Arduino Duemilanova
          GetCoreCallback()->SetDeviceProperty(port_.c_str(), MM::g_Keyword_Handshaking, "Off");
-         GetCoreCallback()->SetDeviceProperty(port_.c_str(), MM::g_Keyword_BaudRate, "115200" );
+         GetCoreCallback()->SetDeviceProperty(port_.c_str(), MM::g_Keyword_BaudRate, "9600");
          GetCoreCallback()->SetDeviceProperty(port_.c_str(), MM::g_Keyword_StopBits, "1");
          // Arduino timed out in GetControllerVersion even if AnswerTimeout  = 300 ms
          GetCoreCallback()->SetDeviceProperty(port_.c_str(), "AnswerTimeout", "500.0");
@@ -339,7 +490,7 @@ int ShapeokoGrblHub::GetStatus()
 {
   LogMessage("GetStatus");
    std::string cmd;
-   cmd.assign("$sr"); // x step/mm
+   cmd.assign("?"); // x step/mm
    std::string returnString;
    int ret = SendCommand(cmd,returnString);
    if (ret != DEVICE_OK)
@@ -348,65 +499,23 @@ int ShapeokoGrblHub::GetStatus()
     return ret;
    }
    LogMessage("returnString=" + returnString);
-       // X position:          0.000 mm
-       // Y position:          0.000 mm
-       // Z position:          0.000 mm
-       // A position:          0.000 deg
-       // Feed rate:           0.000 mm/min
-       // Velocity:            0.000 mm/min
-       // Units:               G21 - millimeter mode
-       // Coordinate system:   G54 - coordinate system 1
-       // Distance mode:       G90 - absolute distance mode
-       // Feed rate mode:      G94 - units-per-minute mode (i.e. feedrate mode)
-       // Machine state:       Ready
    std::vector<std::string> tokenInput;
-   //      char* pEnd;
-   	CDeviceUtils::Tokenize(returnString, tokenInput, "\r\n");
-        for(std::vector<std::string>::iterator i = tokenInput.begin(); i != tokenInput.end(); ++i) {
-          LogMessage("Token input: ");
-          LogMessage(*i);
-          string x;
-          if (i->substr(0, 10) == "X position") {
-            x = i->substr(21,10);
-            std::vector<std::string> spl;
-            spl = split(x, ' ');
-            MPos[0] = stringToNum<double>(spl[0]);
-          }
-          if (i->substr(0, 10) == "Y position") {
-            x = i->substr(21,10);
-            std::vector<std::string> spl;
-            spl = split(x, ' ');
-            MPos[1] = stringToNum<double>(spl[0]);
-          }
-          if (i->substr(0, 10) == "Z position") {
-            x = i->substr(21,10);
-            std::vector<std::string> spl;
-            spl = split(x, ' ');
-            MPos[2] = stringToNum<double>(spl[0]);
-          }
-          if (i->substr(0, 9) == "Velocity:") {
-            x = i->substr(21,10);
-          }
-          if (i->substr(0, 6) == "Units:") {
-            // TODO(dek): correct these if wrong.
-            x = i->substr(21,10);
-          }
-          if (i->substr(0, 18) == "Coordinate system:") {
-            x = i->substr(21,10);
-          }
-          if (i->substr(0, 14) == "Distance mode:") {
-            // TODO(dek): correct these if wrong.
-            x = i->substr(21,10);
-          }
-          if (i->substr(0, 14) == "Machine state:") {
-            x = i->substr(21,10);
-            SetProperty("Status",x.c_str());
-          }
-          if (!x.empty()) {
-            LogMessage("Parsed line:");
-                LogMessage(x);
-                 }
-
-        }
-        return DEVICE_OK;
+   char* pEnd;
+   CDeviceUtils::Tokenize(returnString, tokenInput, "<>,:\r\n");
+   //sample: <Idle,MPos:0.000,0.000,0.000,WPos:0.000,0.000,0.000>
+   if(tokenInput.size() != 9)
+     {
+       LogMessage(returnString.c_str());
+       LogMessage("echo error!");
+       return DEVICE_ERR;
+     }
+   // status.assign(tokenInput[0].c_str());
+   MPos[0] = stringToNum<double>(tokenInput[2]);
+   MPos[1] = stringToNum<double>(tokenInput[3]);
+   MPos[2] = stringToNum<double>(tokenInput[4]);
+   WPos[0] = stringToNum<double>(tokenInput[6]);
+   WPos[1] = stringToNum<double>(tokenInput[7]);
+   WPos[2] = stringToNum<double>(tokenInput[8]);
+   
+   return DEVICE_OK;
 }

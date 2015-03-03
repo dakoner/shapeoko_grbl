@@ -7,7 +7,7 @@
 
 CShapeokoGrblXYStage::CShapeokoGrblXYStage() :
 CXYStageBase<CShapeokoGrblXYStage>(),
-stepSize_um_(0.015),
+stepSize_um_(0.025),
 posX_um_(0.0),
 posY_um_(0.0),
 busy_(false),
@@ -35,11 +35,13 @@ const char* NoHubError = "Parent Hub not defined.";
 
 void CShapeokoGrblXYStage::GetName(char* Name) const
 {
+  LogMessage("XYStage: GetName");
    CDeviceUtils::CopyLimitedString(Name, g_XYStageDeviceName);
 }
 
 int CShapeokoGrblXYStage::Initialize()
 {
+  LogMessage("XYStage: initialize");
    ShapeokoGrblHub* pHub = static_cast<ShapeokoGrblHub*>(GetParentHub());
    if (pHub)
    {
@@ -98,6 +100,7 @@ bool CShapeokoGrblXYStage::Busy()
 
 int CShapeokoGrblXYStage::SetPositionSteps(long x, long y)
 {
+  LogMessage("XYStage: SetPositionSteps");
    if (timeOutTimer_ != 0)
    {
       if (!timeOutTimer_->expired(GetCurrentMMTime()))
@@ -113,7 +116,16 @@ int CShapeokoGrblXYStage::SetPositionSteps(long x, long y)
    timeOutTimer_ = new MM::TimeoutMs(GetCurrentMMTime(),  timeOut);
    posX_um_ = x * stepSize_um_;
    posY_um_ = y * stepSize_um_;
-   int ret = OnXYStagePositionChanged(posX_um_, posY_um_);
+
+   char buff[100];
+   sprintf(buff, "G0 X%f Y%f", posX_um_/1000., posY_um_/1000.);
+   std::string buffAsStdStr = buff;
+   ShapeokoGrblHub* pHub = static_cast<ShapeokoGrblHub*>(GetParentHub());
+   int ret = pHub->SendCommand(buffAsStdStr,buffAsStdStr);
+   if (ret != DEVICE_OK)
+      return ret;
+
+   ret = OnXYStagePositionChanged(posX_um_, posY_um_);
    if (ret != DEVICE_OK)
       return ret;
 
@@ -122,6 +134,7 @@ int CShapeokoGrblXYStage::SetPositionSteps(long x, long y)
 
 int CShapeokoGrblXYStage::GetPositionSteps(long& x, long& y)
 {
+  LogMessage("XYStage: GetPositionSteps");
    x = (long)(posX_um_ / stepSize_um_);
    y = (long)(posY_um_ / stepSize_um_);
    return DEVICE_OK;
@@ -129,6 +142,7 @@ int CShapeokoGrblXYStage::GetPositionSteps(long& x, long& y)
 
 int CShapeokoGrblXYStage::SetRelativePositionSteps(long x, long y)
 {
+  LogMessage("XYStage: SetRelativePositioNSteps");
    long xSteps, ySteps;
    GetPositionSteps(xSteps, ySteps);
 
