@@ -147,11 +147,8 @@ int ZStage::SetPositionSteps(long steps)
  */
 int ZStage::GetPositionSteps(long& steps)
 {
-	ShapeokoGrblHub* pHub = static_cast<ShapeokoGrblHub*>(GetParentHub());
-   int ret = pHub->GetStatus();
-   if (ret != DEVICE_OK)
-      return ret;
-  // TODO(dek): implement status to get Z position
+  LogMessage("XYStage: GetPositionSteps");
+   steps = (long)(posZ_um_ / stepSize_um_);
    return DEVICE_OK;
 }
 
