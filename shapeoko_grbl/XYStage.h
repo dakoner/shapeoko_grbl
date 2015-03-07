@@ -1,5 +1,5 @@
-#ifndef _SHAPEOKO_TINYG_XYSTAGE_H_
-#define _SHAPEOKO_TINYG_XYSTAGE_H_
+#ifndef _SHAPEOKO_GRBL_XYSTAGE_H_
+#define _SHAPEOKO_GRBL_XYSTAGE_H_
 
 #include "DeviceBase.h"
 #include "DeviceThreads.h"
@@ -71,4 +71,4 @@ private:
    double upperLimit_;
 };
 
-#endif // _SHAPEOKO_TINYG_XYSTAGE_H_
+#endif // _SHAPEOKO_GRBL_XYSTAGE_H_

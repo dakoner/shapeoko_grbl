@@ -24,6 +24,7 @@
 
 #include "ShapeokoGrbl.h"
 #include "XYStage.h"
+#include "ZStage.h"
 #include <cstdio>
 #include <string>
 #include <math.h>
@@ -38,6 +39,7 @@ using namespace std;
 // External names used used by the rest of the system
 // to load particular device from the "ShapeokoTinyGCamera.dll" library
 const char* g_XYStageDeviceName = "DXYStage";
+const char* g_ZStageDeviceName = "DZStage";
 const char* g_HubDeviceName = "DHub";
 const char* g_versionProp = "Version";
 
@@ -48,6 +50,7 @@ const char* g_versionProp = "Version";
 MODULE_API void InitializeModuleData()
 {
    RegisterDevice(g_XYStageDeviceName, MM::XYStageDevice, "ShapeokoGrbl XY stage");
+     RegisterDevice(g_ZStageDeviceName, MM::StageDevice, "ShapeokoTinyG Z stage");
    RegisterDevice(g_HubDeviceName, MM::HubDevice, "DHub");
 }
 
@@ -60,6 +63,11 @@ MODULE_API MM::Device* CreateDevice(const char* deviceName)
    {
       // create stage
       return new CShapeokoGrblXYStage();
+   }
+   else if (strcmp(deviceName, g_ZStageDeviceName) == 0)
+   {
+      // create stage
+      return new ZStage();
    }
    else if (strcmp(deviceName, g_HubDeviceName) == 0)
    {
@@ -156,7 +164,7 @@ int ShapeokoGrblHub::Initialize()
    //    return ret;
 
    // // turn off verbose serial debug messages
-   // GetCoreCallback()->SetDeviceProperty(port_.c_str(), "Verbose", "0");
+   GetCoreCallback()->SetDeviceProperty(port_.c_str(), "Verbose", "1");
    // synchronize all properties
    // --------------------------
 

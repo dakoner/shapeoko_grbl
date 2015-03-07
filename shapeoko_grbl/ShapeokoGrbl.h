@@ -27,8 +27,8 @@
 //                CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
 //                INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES.
 
-#ifndef _SHAPEOKO_TINYG_H_
-#define _SHAPEOKO_TINYG_H_
+#ifndef _SHAPEOKO_GRBL_H_
+#define _SHAPEOKO_GRBL_H_
 
 #include "DeviceBase.h"
 #include "DeviceThreads.h"
@@ -117,4 +117,4 @@ private:
 };
 
 
-#endif //_SHAPEOKO_TINYG_H_
+#endif //_SHAPEOKO_GRBL_H_

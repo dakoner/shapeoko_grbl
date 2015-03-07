@@ -3,12 +3,14 @@ CXXFLAGS=-std=c++11 -c -fPIC -DPACKAGE_NAME=\"Micro-Manager\" -DPACKAGE_TARNAME=
 install: libmmgr_dal_ShapeokoGrbl.so.0
 	cp libmmgr_dal_ShapeokoGrbl.so.0 /home/dek/ImageJ
 
-libmmgr_dal_ShapeokoGrbl.so.0: ShapeokoGrbl.o XYStage.o
-	g++  -fPIC -DPIC -shared  ShapeokoGrbl.o XYStage.o  -Wl,--whole-archive /home/dek/mm/micromanager-1.4/DeviceAdapters/../MMDevice/.libs/libMMDevice.a -Wl,--no-whole-archive  -ldl  -pthread -O2   -pthread -Wl,-soname -Wl,libmmgr_dal_ShapeokoGrbl.so.0 -o libmmgr_dal_ShapeokoGrbl.so.0
+libmmgr_dal_ShapeokoGrbl.so.0: ShapeokoGrbl.o XYStage.o ZStage.o
+	g++  -fPIC -DPIC -shared  ShapeokoGrbl.o XYStage.o ZStage.o  -Wl,--whole-archive /home/dek/mm/micromanager-1.4/DeviceAdapters/../MMDevice/.libs/libMMDevice.a -Wl,--no-whole-archive  -ldl  -pthread -O2   -pthread -Wl,-soname -Wl,libmmgr_dal_ShapeokoGrbl.so.0 -o libmmgr_dal_ShapeokoGrbl.so.0
 
 ShapeokoGrbl.o: ShapeokoGrbl.cpp ShapeokoGrbl.h
 
 XYStage.o: XYStage.cpp XYStage.h
+
+ZStage.o: ZStage.cpp ZStage.h
 
 clean:
 	rm -f *.o *.so.0
