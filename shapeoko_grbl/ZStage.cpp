@@ -118,20 +118,27 @@ int ZStage::GetPositionUm(double& pos)
 int ZStage::SetPositionSteps(long steps)
 {
   LogMessage("ZStage: SetPositionSteps");
-   if (timeOutTimer_ != 0)
-   {
-      if (!timeOutTimer_->expired(GetCurrentMMTime()))
-         return ERR_STAGE_MOVING;
-      delete (timeOutTimer_);
-   }
+  //  if (timeOutTimer_ != 0)
+  //  {
+  // LogMessage("ZStage: 1");
+  //     if (!timeOutTimer_->expired(GetCurrentMMTime()))
+  //        return ERR_STAGE_MOVING;
+  //     delete (timeOutTimer_);
+  // LogMessage("ZStage: 2");
+  //  }
    posZ_um_ = steps * stepSize_um_;
    
 
    char buff[100];
    sprintf(buff, "G0 Z%f", posZ_um_/1000.);
+   LogMessage("ZStage buff:");
+   LogMessage(buff);
    std::string buffAsStdStr = buff;
+  LogMessage("ZStage: SetPositionSteps get hub");
    ShapeokoGrblHub* pHub = static_cast<ShapeokoGrblHub*>(GetParentHub());
+   LogMessage("ZStage: SetPositionSteps got hub");
    int ret = pHub->SendCommand(buffAsStdStr,buffAsStdStr);
+   LogMessage("ZStage: SetPositionSteps sent command");
    if (ret != DEVICE_OK)
       return ret;
 
@@ -147,7 +154,7 @@ int ZStage::SetPositionSteps(long steps)
  */
 int ZStage::GetPositionSteps(long& steps)
 {
-  LogMessage("XYStage: GetPositionSteps");
+  LogMessage("ZStage: GetPositionSteps");
    steps = (long)(posZ_um_ / stepSize_um_);
    return DEVICE_OK;
 }
