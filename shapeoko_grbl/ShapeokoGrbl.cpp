@@ -149,15 +149,6 @@ int ShapeokoGrblHub::Initialize()
 
    MMThreadGuard myLock(lock_);
 
-   ret = GetControllerVersion(version_);
-   if( DEVICE_OK != ret)
-      return ret;
-
-   pAct = new CPropertyAction(this, &ShapeokoGrblHub::OnVersion);
-   std::ostringstream sversion;
-   sversion << version_;
-   CreateProperty(g_versionProp, sversion.str().c_str(), MM::String, true, pAct);
-
    // pAct = new CPropertyAction(this, &MyShapeokoTinyg::OnCommand);
    // ret = CreateProperty("Command","", MM::String, false, pAct);
    // if (DEVICE_OK != ret)
@@ -168,22 +159,33 @@ int ShapeokoGrblHub::Initialize()
    // synchronize all properties
    // --------------------------
 
+   ret = GetControllerVersion(version_);
+   if( DEVICE_OK != ret)
+      return ret;
+
+   pAct = new CPropertyAction(this, &ShapeokoGrblHub::OnVersion);
+   std::ostringstream sversion;
+   sversion << version_;
+   CreateProperty(g_versionProp, sversion.str().c_str(), MM::String, true, pAct);
+
+
    ret = GetStatus();
    if (ret != DEVICE_OK)
       return ret;
 
+   PurgeComPortH();
+   
    LogMessage("Unlock device.");
-   ret = SetCommandComPortH("$X", "\n");
-   if (ret != DEVICE_OK)
-     return ret;
-   std::string an;
-    LogMessage("waiting for answer");
-   ret = GetSerialAnswerComPortH(an,"\r\n");
-   if (ret != DEVICE_OK)
-     return ret;
-   ret = GetSerialAnswerComPortH(an,"\r\n");
-   if (ret != DEVICE_OK)
-     return ret;
+   ret = SendCommand("$X");
+   if(DEVICE_OK != ret){
+     return DEVICE_ERR;
+   }
+   std::string returnString;
+   ret = ReceiveResponse(returnString);
+   if(DEVICE_OK != ret){
+     return DEVICE_ERR;
+   }
+
    LogMessage("Unlocked device.");
 
    ret = UpdateStatus();
@@ -202,32 +204,32 @@ int ShapeokoGrblHub::GetControllerVersion(string& version)
   LogMessage("GetControllerVersion");
    int ret = DEVICE_OK;
    MMThreadGuard(this->executeLock_);
+   PurgeComPortH();
    std::string cmd;
    char buff[]={0x18,0x00};
    cmd.assign(buff); 
+
+   ret = SendCommand(cmd, "");
+   if(DEVICE_OK != ret){
+     return DEVICE_ERR;
+   }
+   // Ignore initial empty string
    std::string returnString;
-   SetAnswerTimeoutMs(2000.0);
-   PurgeComPortH();
-    LogMessage("about to reset");
-   ret = SetCommandComPortH(cmd.c_str(),"\n");
-   if (ret != DEVICE_OK)
-     return ret;
-   std::string an;
-    LogMessage("waiting for answer");
-   ret = GetSerialAnswerComPortH(an,"\r\n");
-    LogMessage("1");
-   if (ret != DEVICE_OK)
-     return ret;
-    LogMessage("2");
-   std::string an2;
-   ret = GetSerialAnswerComPortH(an2,"\r\n");
-    LogMessage("3");
-   if (ret != DEVICE_OK)
-     return ret;
-    LogMessage("4");
-    LogMessage("got answer");
-    LogMessage(an2);
-   returnString = an2;
+   ret = ReceiveResponse(returnString);
+   if(DEVICE_OK != ret){
+     return DEVICE_ERR;
+   }
+   if (returnString != "") {
+     LogMessage("Expected empty string, got ");
+     LogMessage(returnString);
+     return DEVICE_ERR;
+   }
+   ret = ReceiveResponse(returnString);
+   if(DEVICE_OK != ret){
+     return DEVICE_ERR;
+   }
+     LogMessage("got: ");
+     LogMessage(returnString);
 
    std::vector<std::string> tokenInput;
    char* pEnd;
@@ -298,6 +300,7 @@ int ShapeokoGrblHub::OnPort(MM::PropertyBase* pProp, MM::ActionType pAct)
 
 int ShapeokoGrblHub::OnCommand(MM::PropertyBase* pProp, MM::ActionType pAct)
 {
+   PurgeComPortH();
   LogMessage("OnCommand");
    if (pAct == MM::BeforeGet)
    {
@@ -321,7 +324,7 @@ int ShapeokoGrblHub::OnCommand(MM::PropertyBase* pProp, MM::ActionType pAct)
    return DEVICE_OK;
 }
 
-int ShapeokoGrblHub::SendCommand(std::string command)
+int ShapeokoGrblHub::SendCommand(std::string command, std::string terminator)
 {
   LogMessage("SendCommand");
   LogMessage("command=" + command);
@@ -332,7 +335,7 @@ int ShapeokoGrblHub::SendCommand(std::string command)
    int ret = DEVICE_OK;
 
    LogMessage("Write command.");
-   ret = SetCommandComPortH(command.c_str(),"\r\n");
+   ret = SetCommandComPortH(command.c_str(), terminator.c_str());
    LogMessage("set command, ret=" + ret);
    if (ret != DEVICE_OK)
    {
@@ -343,7 +346,6 @@ int ShapeokoGrblHub::SendCommand(std::string command)
 int ShapeokoGrblHub::ReceiveResponse(std::string &returnString, float timeout)
 {
   MMThreadGuard(this->executeLock_);
-  PurgeComPortH();
   SetAnswerTimeoutMs(timeout);
 
   std::string an;
@@ -356,23 +358,10 @@ int ShapeokoGrblHub::ReceiveResponse(std::string &returnString, float timeout)
 	  LogMessage(std::string("answer get error!_"));
 	  return ret;
 	}
-      ret = GetSerialAnswerComPortH(an,"\r\n");
-      //ret = comPort->Read(answer,3,charsRead);
-      if (ret != DEVICE_OK)
-	{
-	  LogMessage(std::string("answer get error!_"));
-	  return ret;
-	}
       LogMessage("answer:");
       LogMessage(std::string(an));
-      //sample:>>? >><Idle,MPos:0.000,0.000,0.000,WPos:0.000,0.000,0.000>
-      if (an.length() <1)
-	return DEVICE_ERR;
       returnString.assign(an);
-      // if (returnString.find("ok") != std::string::npos)
       return DEVICE_OK;
-      // else
-      //         return DEVICE_ERR;
     }
   catch(...)
     {
@@ -483,43 +472,36 @@ Type stringToNum(const std::string& str)
 // 2. purge the port
 int ShapeokoGrblHub::GetStatus()
 {
+   PurgeComPortH();
   LogMessage("GetStatus");
-   std::string returnString;
-   int ret = SetCommandComPortH("?", "\n");
-   if (ret != DEVICE_OK)
-     return ret;
-   std::string an;
-    LogMessage("waiting for answer");
-   ret = GetSerialAnswerComPortH(an,"\r\n");
-   if (ret != DEVICE_OK)
-     return ret;
-   ret = GetSerialAnswerComPortH(an,"\r\n");
-   if (ret != DEVICE_OK)
-     return ret;
-   if (ret != DEVICE_OK)
-   {
-         LogMessage("command send failed!");
-    return ret;
-   }
-   returnString = an;
-   LogMessage("returnString=" + returnString);
-   std::vector<std::string> tokenInput;
-   char* pEnd;
-   CDeviceUtils::Tokenize(returnString, tokenInput, "<>,:\r\n");
-   //sample: <Idle,MPos:0.000,0.000,0.000,WPos:0.000,0.000,0.000>
-   if(tokenInput.size() != 9)
-     {
-       LogMessage(returnString.c_str());
-       LogMessage("echo error!");
-       return DEVICE_ERR;
-     }
-   // status.assign(tokenInput[0].c_str());
-   MPos[0] = stringToNum<double>(tokenInput[2]);
-   MPos[1] = stringToNum<double>(tokenInput[3]);
-   MPos[2] = stringToNum<double>(tokenInput[4]);
-   WPos[0] = stringToNum<double>(tokenInput[6]);
-   WPos[1] = stringToNum<double>(tokenInput[7]);
-   WPos[2] = stringToNum<double>(tokenInput[8]);
+  int ret = SendCommand("?");
+  if(DEVICE_OK != ret){
+    return DEVICE_ERR;
+  }
+  std::string returnString;
+  ret = ReceiveResponse(returnString);
+  if(DEVICE_OK != ret){
+    return DEVICE_ERR;
+  }
+  
+  LogMessage("returnString=" + returnString);
+  std::vector<std::string> tokenInput;
+  char* pEnd;
+  CDeviceUtils::Tokenize(returnString, tokenInput, "<>,:\r\n");
+  //sample: <Idle,MPos:0.000,0.000,0.000,WPos:0.000,0.000,0.000>
+  if(tokenInput.size() != 9)
+    {
+      LogMessage(returnString.c_str());
+      LogMessage("echo error!");
+      return DEVICE_ERR;
+    }
+  // status.assign(tokenInput[0].c_str());
+  MPos[0] = stringToNum<double>(tokenInput[2]);
+  MPos[1] = stringToNum<double>(tokenInput[3]);
+  MPos[2] = stringToNum<double>(tokenInput[4]);
+  WPos[0] = stringToNum<double>(tokenInput[6]);
+  WPos[1] = stringToNum<double>(tokenInput[7]);
+  WPos[2] = stringToNum<double>(tokenInput[8]);
    
-   return DEVICE_OK;
+  return DEVICE_OK;
 }

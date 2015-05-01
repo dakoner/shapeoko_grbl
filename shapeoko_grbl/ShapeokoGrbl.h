@@ -81,7 +81,7 @@ public:
    // HUB api
    int DetectInstalledDevices();
 
-  int SendCommand(std::string command);
+  int SendCommand(std::string command, std::string terminator="\r\n");
   int ReceiveResponse(std::string &returnString, float timeout = 300.0);
    int SetAnswerTimeoutMs(double timout);
    MM::DeviceDetectionStatus DetectDevice(void);
