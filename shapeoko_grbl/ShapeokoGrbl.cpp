@@ -178,7 +178,7 @@ int ShapeokoGrblHub::Initialize()
      return ret;
    std::string an;
     LogMessage("waiting for answer");
-   ret = GetSerialAnswerComPortH(an,"\r\n");
+   ret = GetSerialAnswerComPortH(an,"\n");
    if (ret != DEVICE_OK)
      return ret;
    LogMessage("Unlocked device.");
@@ -211,20 +211,24 @@ int ShapeokoGrblHub::GetControllerVersion(string& version)
      return ret;
    std::string an;
     LogMessage("waiting for answer");
-   ret = GetSerialAnswerComPortH(an,"]\r\n");
+   ret = GetSerialAnswerComPortH(an,"\r\n");
+    LogMessage("1");
    if (ret != DEVICE_OK)
      return ret;
+    LogMessage("2");
    std::string an2;
-   ret = GetSerialAnswerComPortH(an2,"]\r\n");
+   ret = GetSerialAnswerComPortH(an2,"\r\n");
+    LogMessage("3");
    if (ret != DEVICE_OK)
      return ret;
+    LogMessage("4");
     LogMessage("got answer");
-    LogMessage(an);
-   returnString = an;
+    LogMessage(an2);
+   returnString = an2;
 
    std::vector<std::string> tokenInput;
    char* pEnd;
-   CDeviceUtils::Tokenize(returnString, tokenInput, "\r\n[");
+   CDeviceUtils::Tokenize(returnString, tokenInput, "[");
    
    if(tokenInput.size() != 2) {
      LogMessage("tokensize:");
