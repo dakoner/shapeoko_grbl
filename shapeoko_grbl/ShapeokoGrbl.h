@@ -81,7 +81,8 @@ public:
    // HUB api
    int DetectInstalledDevices();
 
-   int SendCommand(std::string command, std::string &returnString);
+  int SendCommand(std::string command);
+  int ReceiveResponse(std::string &returnString, float timeout = 300.0);
    int SetAnswerTimeoutMs(double timout);
    MM::DeviceDetectionStatus DetectDevice(void);
    int PurgeComPortH() {return PurgeComPort(port_.c_str());}

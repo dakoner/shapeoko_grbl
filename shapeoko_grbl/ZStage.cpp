@@ -137,8 +137,11 @@ int ZStage::SetPositionSteps(long steps)
   LogMessage("ZStage: SetPositionSteps get hub");
    ShapeokoGrblHub* pHub = static_cast<ShapeokoGrblHub*>(GetParentHub());
    LogMessage("ZStage: SetPositionSteps got hub");
-   int ret = pHub->SendCommand(buffAsStdStr,buffAsStdStr);
+   int ret = pHub->SendCommand(buffAsStdStr);
    LogMessage("ZStage: SetPositionSteps sent command");
+   if (ret != DEVICE_OK)
+      return ret;
+   ret = pHub->ReceiveResponse(buffAsStdStr);
    if (ret != DEVICE_OK)
       return ret;
 

@@ -121,7 +121,10 @@ int CShapeokoGrblXYStage::SetPositionSteps(long x, long y)
    sprintf(buff, "G0 X%f Y%f", posX_um_/1000., posY_um_/1000.);
    std::string buffAsStdStr = buff;
    ShapeokoGrblHub* pHub = static_cast<ShapeokoGrblHub*>(GetParentHub());
-   int ret = pHub->SendCommand(buffAsStdStr,buffAsStdStr);
+   int ret = pHub->SendCommand(buffAsStdStr);
+   if (ret != DEVICE_OK)
+     return ret;
+   ret = pHub->ReceiveResponse(buffAsStdStr);
    if (ret != DEVICE_OK)
       return ret;
 
