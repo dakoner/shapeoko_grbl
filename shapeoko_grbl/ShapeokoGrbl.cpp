@@ -187,6 +187,17 @@ int ShapeokoGrblHub::Initialize()
    }
 
    LogMessage("Unlocked device.");
+   LogMessage("resetting device origin.");
+   ret = SendCommand("G92");
+   if(DEVICE_OK != ret){
+     return DEVICE_ERR;
+   }
+   ret = ReceiveResponse(returnString);
+   if(DEVICE_OK != ret){
+     return DEVICE_ERR;
+   }
+
+   LogMessage("reset device origin.");
 
    ret = UpdateStatus();
    if (ret != DEVICE_OK)
