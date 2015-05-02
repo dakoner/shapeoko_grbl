@@ -145,10 +145,43 @@ int ZStage::SetPositionSteps(long steps)
    if (ret != DEVICE_OK)
       return ret;
 
-   //ret = OnZStagePositionChanged(posZ_um_);
-   
+     CDeviceUtils::SleepMs(250);
+    ret = pHub->PurgeComPortH();
+    bool done;
+  while(!done) {
+    ret = pHub->PurgeComPortH();
+    
+    int ret = pHub->SendCommand("?", "");
+    if(DEVICE_OK != ret){
+      return ret;
+    }
+    std::string returnString;
+    ret = pHub->ReceiveResponse(returnString);
+    if(DEVICE_OK != ret){
+      return ret;
+    }
+  
+    LogMessage("returnString=" + returnString);
+    std::vector<std::string> tokenInput;
+    char* pEnd;
+    CDeviceUtils::Tokenize(returnString, tokenInput, "<>,:\r\n");
+    //sample: <Idle,MPos:0.000,0.000,0.000,WPos:0.000,0.000,0.000>
+    if(tokenInput.size() != 9)
+      {
+	LogMessage(returnString.c_str());
+	LogMessage("echo error!");
+	return DEVICE_ERR;
+      }
+    if (tokenInput[0] == "Idle")
+      {
+	  LogMessage("got idle");
+	  break;
+      }
+  }
 
-   // CDeviceUtils::SleepMs(100);
+
+   // ret = OnZStagePositionChanged(posZ_um_);
+   
    return DEVICE_OK;
 }
 

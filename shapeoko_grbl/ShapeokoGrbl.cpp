@@ -159,21 +159,18 @@ int ShapeokoGrblHub::Initialize()
    // synchronize all properties
    // --------------------------
 
-   ret = GetControllerVersion(version_);
-   if( DEVICE_OK != ret)
-      return ret;
-
    pAct = new CPropertyAction(this, &ShapeokoGrblHub::OnVersion);
    std::ostringstream sversion;
    sversion << version_;
    CreateProperty(g_versionProp, sversion.str().c_str(), MM::String, true, pAct);
 
-
-   ret = GetStatus();
-   if (ret != DEVICE_OK)
+   CDeviceUtils::SleepMs(1000);
+   // At port opening, the arduino will sleep for 1-2 seconds then output a version string.
+   ret = GetControllerVersion(version_);
+   if( DEVICE_OK != ret)
       return ret;
-
    PurgeComPortH();
+
    
    LogMessage("Unlock device.");
    ret = SendCommand("$X");
@@ -181,14 +178,15 @@ int ShapeokoGrblHub::Initialize()
      return DEVICE_ERR;
    }
    std::string returnString;
-   ret = ReceiveResponse(returnString);
+   ret = ReceiveResponse(returnString, 1000);
    if(DEVICE_OK != ret){
      return DEVICE_ERR;
    }
-
    LogMessage("Unlocked device.");
+   PurgeComPortH();
+   
    LogMessage("resetting device origin.");
-   ret = SendCommand("G92");
+   ret = SendCommand("G92 X0 Y0 Z0");
    if(DEVICE_OK != ret){
      return DEVICE_ERR;
    }
@@ -198,13 +196,20 @@ int ShapeokoGrblHub::Initialize()
    }
 
    LogMessage("reset device origin.");
+   CDeviceUtils::SleepMs(500);
+   PurgeComPortH();
+
+   ret = GetStatus();
+   if (ret != DEVICE_OK)
+      return ret;
+   PurgeComPortH();
 
    ret = UpdateStatus();
    if (ret != DEVICE_OK)
       return ret;
 
-  	initialized_ = true;
-	return DEVICE_OK;
+   initialized_ = true;
+   return DEVICE_OK;
 }
 
 // private and expects caller to:
@@ -215,18 +220,9 @@ int ShapeokoGrblHub::GetControllerVersion(string& version)
   LogMessage("GetControllerVersion");
    int ret = DEVICE_OK;
    MMThreadGuard(this->executeLock_);
-   PurgeComPortH();
-   std::string cmd;
-   char buff[]={0x18,0x00};
-   cmd.assign(buff); 
-
-   ret = SendCommand(cmd, "");
-   if(DEVICE_OK != ret){
-     return DEVICE_ERR;
-   }
    // Ignore initial empty string
    std::string returnString;
-   ret = ReceiveResponse(returnString);
+   ret = ReceiveResponse(returnString, 1000);
    if(DEVICE_OK != ret){
      return DEVICE_ERR;
    }
@@ -235,7 +231,7 @@ int ShapeokoGrblHub::GetControllerVersion(string& version)
      LogMessage(returnString);
      return DEVICE_ERR;
    }
-   ret = ReceiveResponse(returnString);
+   ret = ReceiveResponse(returnString, 1000);
    if(DEVICE_OK != ret){
      return DEVICE_ERR;
    }
@@ -251,7 +247,11 @@ int ShapeokoGrblHub::GetControllerVersion(string& version)
      LogMessage(std::to_string(tokenInput.size()).c_str());
      return DEVICE_ERR;
    }
-   
+
+   // Depending on lock state, an optional message will be output on how to unlock.
+   CDeviceUtils::SleepMs(1000);
+   PurgeComPortH();
+
    version_ = tokenInput[0];
    return ret;
 }
@@ -478,14 +478,22 @@ Type stringToNum(const std::string& str)
 	return num;
 }
 
+std::string ShapeokoGrblHub::GetState() {
+  return state_;
+}
+
+void ShapeokoGrblHub::GetPos(float &x, float &y) {
+  x = MPos[0];
+  y = MPos[1];
+}
+
 // private and expects caller to:
 // 1. guard the port
 // 2. purge the port
 int ShapeokoGrblHub::GetStatus()
 {
-   PurgeComPortH();
   LogMessage("GetStatus");
-  int ret = SendCommand("?");
+  int ret = SendCommand("?", "");
   if(DEVICE_OK != ret){
     return DEVICE_ERR;
   }
@@ -506,7 +514,7 @@ int ShapeokoGrblHub::GetStatus()
       LogMessage("echo error!");
       return DEVICE_ERR;
     }
-  // status.assign(tokenInput[0].c_str());
+  state_.assign(tokenInput[0].c_str());
   MPos[0] = stringToNum<double>(tokenInput[2]);
   MPos[1] = stringToNum<double>(tokenInput[3]);
   MPos[2] = stringToNum<double>(tokenInput[4]);

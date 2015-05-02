@@ -81,7 +81,7 @@ public:
    // HUB api
    int DetectInstalledDevices();
 
-  int SendCommand(std::string command, std::string terminator="\r\n");
+  int SendCommand(std::string command, std::string terminator="\r");
   int ReceiveResponse(std::string &returnString, float timeout = 300.0);
    int SetAnswerTimeoutMs(double timout);
    MM::DeviceDetectionStatus DetectDevice(void);
@@ -99,7 +99,10 @@ public:
         {
                 return GetSerialAnswer(port_.c_str(),term,ans);
         }
-   int GetStatus(); 
+  int GetStatus(); 
+  std::string GetState(); 
+  void GetPos(float &x, float &y); 
+  int ResetDevice();
   int GetControllerVersion(std::string& version);
 
 private:
@@ -113,6 +116,7 @@ private:
    std::string port_;
    bool portAvailable_;
    std::string commandResult_;
+  std::string state_;
    double MPos[3];
    double WPos[3];
 };

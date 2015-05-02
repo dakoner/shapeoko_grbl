@@ -11,7 +11,6 @@ stepSize_um_(0.025),
 posX_um_(0.0),
 posY_um_(0.0),
 busy_(false),
-timeOutTimer_(0),
 velocity_(10.0), // in micron per second
 initialized_(false),
 lowerLimit_(0.0),
@@ -88,59 +87,72 @@ int CShapeokoGrblXYStage::Shutdown()
 
 bool CShapeokoGrblXYStage::Busy()
 {
-   if (timeOutTimer_ == 0)
-      return false;
-   if (timeOutTimer_->expired(GetCurrentMMTime()))
-   {
-      // delete(timeOutTimer_);
-      return false;
-   }
-   return true;
+  ShapeokoGrblHub* pHub = static_cast<ShapeokoGrblHub*>(GetParentHub());
+  int ret = pHub->GetStatus();
+  if (ret != DEVICE_OK) {
+    LogMessage("Got error from machien when calling busy.");
+    return ret;
+  }
+  std::string state = pHub->GetState();
+  if (state.compare(0, 5, "Idle") == 0) {
+    LogMessage("I am idle");
+    return false;
+  }
+  LogMessage("I am busy");
+  return true;
 }
 
 int CShapeokoGrblXYStage::SetPositionSteps(long x, long y)
 {
   LogMessage("XYStage: SetPositionSteps");
-   if (timeOutTimer_ != 0)
-   {
-      if (!timeOutTimer_->expired(GetCurrentMMTime()))
-         return ERR_STAGE_MOVING;
-      delete (timeOutTimer_);
-   }
-   double newPosX = x * stepSize_um_;
-   double newPosY = y * stepSize_um_;
-   double difX = newPosX - posX_um_;
-   double difY = newPosY - posY_um_;
-   double distance = sqrt( (difX * difX) + (difY * difY) );
-   long timeOut = (long) (distance / velocity_);
-   timeOutTimer_ = new MM::TimeoutMs(GetCurrentMMTime(),  timeOut);
-   posX_um_ = x * stepSize_um_;
-   posY_um_ = y * stepSize_um_;
+  if (Busy())
+    return ERR_STAGE_MOVING;
+  double newPosX = x * stepSize_um_;
+  double newPosY = y * stepSize_um_;
+  double difX = newPosX - posX_um_;
+  double difY = newPosY - posY_um_;
+  double distance = sqrt( (difX * difX) + (difY * difY) );
+  posX_um_ = x * stepSize_um_;
+  posY_um_ = y * stepSize_um_;
 
-   char buff[100];
-   sprintf(buff, "G0 X%f Y%f", posX_um_/1000., posY_um_/1000.);
-   std::string buffAsStdStr = buff;
-   ShapeokoGrblHub* pHub = static_cast<ShapeokoGrblHub*>(GetParentHub());
-   int ret = pHub->SendCommand(buffAsStdStr);
-   if (ret != DEVICE_OK)
-     return ret;
-   ret = pHub->ReceiveResponse(buffAsStdStr);
-   if (ret != DEVICE_OK)
-      return ret;
+  char buff[100];
+  sprintf(buff, "G0 X%f Y%f", posX_um_/1000., posY_um_/1000.);
+  std::string buffAsStdStr = buff;
+  ShapeokoGrblHub* pHub = static_cast<ShapeokoGrblHub*>(GetParentHub());
+  int ret = pHub->SendCommand(buffAsStdStr);
+  if (ret != DEVICE_OK)
+    return ret;
+  ret = pHub->ReceiveResponse(buffAsStdStr);
+  if (ret != DEVICE_OK)
+    return ret;
 
-   ret = OnXYStagePositionChanged(posX_um_, posY_um_);
-   if (ret != DEVICE_OK)
-      return ret;
-
-   return DEVICE_OK;
+  ret = OnXYStagePositionChanged(posX_um_, posY_um_);
+  if (ret != DEVICE_OK)
+    return ret;
+  
+  return DEVICE_OK;
 }
 
 int CShapeokoGrblXYStage::GetPositionSteps(long& x, long& y)
 {
+  ShapeokoGrblHub* pHub = static_cast<ShapeokoGrblHub*>(GetParentHub());
+  int ret = pHub->GetStatus();
+  if (ret != DEVICE_OK) {
+    LogMessage("Got error from machien when calling busy.");
+    return ret;
+  }
+  float tx, ty;
+  pHub->GetPos(tx, ty);
+  tx *= 1000.;
+  ty *= 1000.;
   LogMessage("XYStage: GetPositionSteps");
-   x = (long)(posX_um_ / stepSize_um_);
-   y = (long)(posY_um_ / stepSize_um_);
-   return DEVICE_OK;
+  LogMessage(std::to_string(tx));
+  LogMessage(std::to_string(ty));
+  x = (long)(tx / stepSize_um_);
+  y = (long)(ty / stepSize_um_);
+  LogMessage(std::to_string(x));
+  LogMessage(std::to_string(y));
+  return DEVICE_OK;
 }
 
 int CShapeokoGrblXYStage::SetRelativePositionSteps(long x, long y)

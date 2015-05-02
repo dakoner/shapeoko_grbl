@@ -64,7 +64,6 @@ private:
    double posX_um_;
    double posY_um_;
    bool busy_;
-   MM::TimeoutMs* timeOutTimer_;
    double velocity_;
    bool initialized_;
    double lowerLimit_;
